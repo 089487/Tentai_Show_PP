@@ -595,7 +595,7 @@ static void print_grid(game_state *state) {
                     printf("○");
             } else if (sp->type == s_tile) {
                 if (sp->flags & F_TILE_ASSOC)
-                    printf("·");
+                    printf(" ");
                 else
                     printf(" ");
             } else if (sp->type == s_edge) {

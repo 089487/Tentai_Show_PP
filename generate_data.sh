@@ -33,11 +33,11 @@ for ((i=0; i<COUNT; i++)); do
     # Run generator for 1 puzzle
     ./generator/simple_generator --size=$SIZE --count=1 --seed=$RANDOM > temp_puzzle.txt
     
-    # Write the second line (Game ID) to .out
+    # Write the second line (Game ID) to .in
     # User instruction: "write the second line (the answer map) to 00.out"
     sed -n '2p' temp_puzzle.txt > "$OUTPUT_DIR/$idx.in"
     
-    # Write the grid (starting from line 4) to .in
+    # Write the grid (starting from line 4) to .out
     # This serves as the input set
     tail -n +4 temp_puzzle.txt > "$OUTPUT_DIR/$idx.out"
     
