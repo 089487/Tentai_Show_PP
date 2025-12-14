@@ -65,10 +65,10 @@ def visualize_puzzle(w, h, dots):
             if x % 2 == 0 and y % 2 == 0:
                 # Vertex
                 grid[y][x] = '+'
-            elif x % 2 == 0:
+            elif x== 0 or x == sx - 1:
                 # Vertical edge
                 grid[y][x] = '│'
-            elif y % 2 == 0:
+            elif y == 0 or y == sy - 1:
                 # Horizontal edge
                 grid[y][x] = '─'
             else:
