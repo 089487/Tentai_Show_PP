@@ -428,8 +428,10 @@ static int generate_try_block(game_state *state, random_state *rs,
     int nadd = 0, nout = 0, i, maxsz;
     
     if (x1 < 0 || y1 < 0 || x2 >= state->sx || y2 >= state->sy) return 0;
-    
-    maxsz = (state->w * state->h) / state->ndots;
+    if (state->ndots > 0)
+        maxsz = (state->w * state->h) / state->ndots;
+    else
+        maxsz = state->w * state->h; 
     if (maxsz < 4) maxsz = 4;
     
     for (int y = y1; y <= y2; y += 2) {
@@ -504,6 +506,7 @@ static void generate_pass(game_state *state, random_state *rs, int *scratch,
         
         if (dot_is_possible(state, sp, 0)) {
             add_dot(sp);
+            state->ndots++;
             solver_obvious_dot(state, sp);
         }
     }
