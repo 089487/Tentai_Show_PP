@@ -214,9 +214,23 @@ void solve(Puzzle *p) {
         iterations++;
         
         if (s->filled_count == p->w * p->h) {
-            print_solution(p, s);
-            // Clean up queue?
-            return;
+            // Verify all dots are used
+            bool all_dots_used = true;
+            bool dot_used[MAX_DOTS] = {false};
+            for(int y=0; y<p->h; y++) {
+                for(int x=0; x<p->w; x++) {
+                    if(s->grid[y][x] >= 0) dot_used[s->grid[y][x]] = true;
+                }
+            }
+            for(int i=0; i<p->num_dots; i++) {
+                if(!dot_used[i]) { all_dots_used = false; break; }
+            }
+            
+            if(all_dots_used) {
+                print_solution(p, s);
+                return;
+            }
+            continue;
         }
         
         // Try to expand each dot
@@ -298,6 +312,54 @@ void solve(Puzzle *p) {
                 
                 for (int ty = cty - 1; ty <= cty + 1; ty++) {
                     for (int tx = ctx - 1; tx <= ctx + 1; tx++) {
+                        if (is_valid_tile(s, p->w, p->h, tx, ty) && touches_dot(dx, dy, tx, ty)) {
+                             // Check symmetry
+                            int sym_x, sym_y;
+                            get_symmetric_tile(dx, dy, tx, ty, &sym_x, &sym_y);
+                            
+                            if (is_valid_tile(s, p->w, p->h, sym_x, sym_y) || (tx == sym_x && ty == sym_y)) {
+                                State *next = (State*)malloc(sizeof(State));
+                                *next = *s;
+                                
+                                next->grid[ty][tx] = d;
+                                next->hash ^= zobrist_table[ty * p->w + tx][d];
+                                next->filled_count++;
+                                
+                                if (tx != sym_x || ty != sym_y) {
+                                    if (next->grid[sym_y][sym_x] == -1) {
+                                        next->grid[sym_y][sym_x] = d;
+                                        next->hash ^= zobrist_table[sym_y * p->w + sym_x][d];
+                                        next->filled_count++;
+                                    } else {
+                                        free(next);
+                                        continue;
+                                    }
+                                }
+                                
+                                if (!is_visited(next->hash)) {
+                                    add_visited(next->hash);
+                                    enqueue(next);
+                                } else {
+                                    free(next);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // If dot has tiles, we MUST expand from existing tiles.
+                // However, we might have missed the case where a dot has tiles but can still expand 
+                // to a tile that is adjacent to the DOT itself but not any existing tile.
+                // This happens when the dot is on an edge/vertex and we added some tiles, 
+                // but there are other valid starting tiles touching the dot.
+                
+                // Check tiles touching the dot again
+                int ctx = (dx - 1) / 2;
+                int cty = (dy - 1) / 2;
+                
+                for (int ty = cty - 1; ty <= cty + 1; ty++) {
+                    for (int tx = ctx - 1; tx <= ctx + 1; tx++) {
+                        // Only consider tiles touching the dot that are unassigned
                         if (is_valid_tile(s, p->w, p->h, tx, ty) && touches_dot(dx, dy, tx, ty)) {
                              // Check symmetry
                             int sym_x, sym_y;
