@@ -560,24 +560,49 @@ static char *encode_game(game_state *state) {
     return desc;
 }
 
+static int is_game_fully_covered(game_state *state) {
+    for (int y = 0; y < state->sy; y++) {
+        for (int x = 0; x < state->sx; x++) {
+            space *sp = &SPACE(state, x, y);
+            if (sp->type == s_tile && !(sp->flags & F_TILE_ASSOC)) {
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
 static game_state *generate_new_game(const game_params *params, random_state *rs) {
-    game_state *state = blank_game(params->w, params->h);
-    int *scratch, sz = state->sx * state->sy;
+    game_state *state = NULL;
+    int *scratch;
+    int attempts = 0;
+
+    do {
+        if (state) free_game(state);
+        state = blank_game(params->w, params->h);
+        int sz = state->sx * state->sy;
+        
+        scratch = snewn(sz, int);
+        for (int i = 0; i < sz; i++) scratch[i] = i;
+        
+        clear_game(state);
+        generate_pass(state, rs, scratch, 100, GP_DOTS);
+        game_update_dots(state);
+        
+        sfree(scratch);
+        attempts++;
+    } while (!is_game_fully_covered(state) && attempts < 10000);
     
-    scratch = snewn(sz, int);
-    for (int i = 0; i < sz; i++) scratch[i] = i;
-    
-    clear_game(state);
-    generate_pass(state, rs, scratch, 100, GP_DOTS);
-    game_update_dots(state);
-    
+    if (attempts >= 10000) {
+        fprintf(stderr, "Warning: Could not generate fully covered puzzle after 10000 attempts.\n");
+    }
+
     // Outline all tiles
     for (int i = 0; i < state->sx * state->sy; i++) {
         if (state->grid[i].type == s_tile)
             outline_tile_fordot(state, &state->grid[i], TRUE);
     }
     
-    sfree(scratch);
     return state;
 }
 
