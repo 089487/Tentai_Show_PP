@@ -1,3 +1,27 @@
+/**
+ * @file seq_solver.cpp
+ * @brief Sequential solver for the Tentai Show (Symmetry) puzzle.
+ *
+ * Parses a Game ID string from an input file, constructs the puzzle grid
+ * and dot layout, then performs a breadth-first search (BFS) that enforces
+ * mirror symmetry around each dot to fill the board with regions. Zobrist
+ * hashing is used to deduplicate visited states efficiently.
+ *
+ * Input format:
+ *  - First line is either "Game ID: <id>" or just "<id>".
+ *  - <id> is of the form "WxH:<data>", where <data> encodes cells on the
+ *    internal (2W+1)x(2H+1) grid using:
+ *      - 'M' for a white (unfilled) dot
+ *      - 'B' for a black dot
+ *      - 'a'..'z' as run-length skips (a=1, b=2, ..., z=26)
+ *
+ * Output:
+ *  - On success, prints an ASCII visualization of the solved puzzle showing
+ *    dots (● black, ○ white) and region borders using '-', '|', and '+'.
+ *  - Returns exit code 0 on success.
+ *  - On parse error or if no solution is found, reports an error and returns 1.
+ */
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -13,7 +37,15 @@
 #include <vector>
 
 class Dot {
-public:
+   public:
+    /**
+     * @class Dot
+     * @brief A clue dot on the internal (2W+1)x(2H+1) grid.
+     *
+     * Holds integer coordinates and a color flag. Coordinates are expressed
+     * in the internal grid space (not tile indices). The color is used for
+     * visualization when printing solutions in this solver.
+     */
     Dot() = default;
     Dot(int x_, int y_, bool black) : x_(x_), y_(y_), is_black_(black) {}
 
@@ -21,17 +53,39 @@ public:
     int y() const noexcept { return y_; }
     bool is_black() const noexcept { return is_black_; }
 
-private:
+   private:
     int x_{0};
     int y_{0};
     bool is_black_{false};
 };
 
 class Puzzle {
-public:
+   public:
+    /**
+     * @class Puzzle
+     * @brief Parsed puzzle specification and geometry.
+     *
+     * Stores the board size in tiles (W x H), the derived internal grid size
+     * (sx = 2W + 1, sy = 2H + 1), and the list of clue dots positioned on the
+     * internal grid. Provides a factory to parse the canonical Game ID string.
+     *
+     * Invariants:
+     *  - 0 <= dot.x < sx and 0 <= dot.y < sy for every dot
+     *  - Internal coordinates with both x and y odd correspond to tile centers
+     */
     Puzzle() = default;
 
-    static std::unique_ptr<Puzzle> fromGameId(const std::string &game_id) {
+    /**
+     * @brief Parse a puzzle from a canonical Game ID string.
+     * @param game_id String like "WxH:<data>" (optionally already prefixed by
+     *        "Game ID: "). Width and height are parsed from the prefix and
+     *        <data> is decoded over the internal (2W+1)x(2H+1) grid using:
+     *        'M' for white dot, 'B' for black dot, and 'a'..'z' as run-length
+     *        skips (a=1, b=2, ..., z=26).
+     * @return Unique pointer to a constructed `Puzzle` on success, or nullptr
+     *         if parsing fails.
+     */
+    static std::unique_ptr<Puzzle> fromGameId(const std::string& game_id) {
         const auto colon = game_id.find(':');
         if (colon == std::string::npos) return nullptr;
 
@@ -82,32 +136,60 @@ public:
         return -1;
     }
 
-private:
+   private:
     int w_{0}, h_{0};
     int sx_{0}, sy_{0};
     std::vector<Dot> dots_{};
 };
 
 class State {
-public:
+   public:
+    /**
+     * @class State
+     * @brief Candidate assignment of tiles to dot indices.
+     *
+     * The grid has dimensions W x H (tiles). Each entry is the owning dot
+     * index (>= 0) or -1 for unfilled. `filledCount` tracks the number of
+     * filled tiles for quick goal checks. `hash` stores the Zobrist hash used
+     * to deduplicate states during search.
+     */
     State() = default;
     State(int w, int h) : grid_(h, std::vector<int8_t>(w, -1)) {}
 
     int8_t& at(int x, int y) { return grid_[y][x]; }
     int8_t at(int x, int y) const { return grid_[y][x]; }
-    const std::vector<std::vector<int8_t>>& grid() const noexcept { return grid_; }
+    const std::vector<std::vector<int8_t>>& grid() const noexcept {
+        return grid_;
+    }
 
     int filledCount{0};
     std::uint64_t hash{0};
 
-private:
-    std::vector<std::vector<int8_t>> grid_{}; // [h][w]
+   private:
+    std::vector<std::vector<int8_t>> grid_{};  // [h][w]
 };
 
 class Solver {
-public:
-    explicit Solver(const Puzzle &puz) : p_(puz) { initZobrist(); }
+   public:
+    /**
+     * @class Solver
+     * @brief Sequential BFS-based solver with dot-centered symmetry.
+     *
+     * Expands regions from dots while enforcing mirror symmetry around the
+     * dot center in the internal grid. Uses Zobrist hashing and a visited-set
+     * to avoid revisiting states. Produces a solved `State` or no solution.
+     */
+    explicit Solver(const Puzzle& puz) : p_(puz) { initZobrist(); }
 
+    /**
+     * @brief Solve the puzzle using BFS with symmetry constraints.
+     * @return A solved `State` if found; `std::nullopt` otherwise.
+     * @details Seeds tiles under odd-odd internal coordinates that contain
+     *          dots, then expands tiles by assigning them to dot indices in a
+     *          way that maintains mirror symmetry around the dot center.
+     *          Uses Zobrist hashing plus a visited set to avoid revisiting
+     *          equivalent states.
+     */
     std::optional<State> solve() {
         State initial(p_.width(), p_.height());
         initial.filledCount = 0;
@@ -150,23 +232,30 @@ public:
                 for (int y = 0; y < p_.height(); ++y) {
                     for (int x = 0; x < p_.width(); ++x) {
                         if (s.at(x, y) == d) {
-                            static constexpr int dirs[4][2] = {{1,0},{-1,0},{0,1},{0,-1}};
-                            for (auto &dir : dirs) {
+                            static constexpr int dirs[4][2] = {
+                                {1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+                            for (auto& dir : dirs) {
                                 const int nx = x + dir[0];
                                 const int ny = y + dir[1];
                                 if (!isValidTile(s, nx, ny)) continue;
 
-                                const auto [sx, sy] = getSymmetricTile(dx, dy, nx, ny);
-                                if (isValidTile(s, sx, sy) || (nx == sx && ny == sy)) {
+                                const auto [sx, sy] =
+                                    getSymmetricTile(dx, dy, nx, ny);
+                                if (isValidTile(s, sx, sy)
+                                    || (nx == sx && ny == sy)) {
                                     State next = s;
                                     next.at(nx, ny) = static_cast<int8_t>(d);
-                                    next.hash ^= zobrist_[ny * p_.width() + nx][d];
+                                    next.hash ^=
+                                        zobrist_[ny * p_.width() + nx][d];
                                     ++next.filledCount;
 
                                     if (nx != sx || ny != sy) {
                                         if (next.at(sx, sy) == -1) {
-                                            next.at(sx, sy) = static_cast<int8_t>(d);
-                                            next.hash ^= zobrist_[sy * p_.width() + sx][d];
+                                            next.at(sx, sy) =
+                                                static_cast<int8_t>(d);
+                                            next.hash ^=
+                                                zobrist_[sy * p_.width() + sx]
+                                                        [d];
                                             ++next.filledCount;
                                         } else {
                                             continue;
@@ -190,7 +279,8 @@ public:
                         if (!touchesDot(dx, dy, tx, ty)) continue;
 
                         const auto [sx, sy] = getSymmetricTile(dx, dy, tx, ty);
-                        if (!(isValidTile(s, sx, sy) || (tx == sx && ty == sy))) continue;
+                        if (!(isValidTile(s, sx, sy) || (tx == sx && ty == sy)))
+                            continue;
 
                         State next = s;
                         next.at(tx, ty) = static_cast<int8_t>(d);
@@ -215,8 +305,16 @@ public:
         return std::nullopt;
     }
 
-    void printSolution(const State &s) const {
-        std::cout << "\nPuzzle Grid (" << p_.width() << "x" << p_.height() << "):\n";
+    /**
+     * @brief Print an ASCII visualization of a solved state.
+     * @param s Solved `State` to render.
+     * @details Renders the internal (2W+1)x(2H+1) grid with dots (● for black,
+     *          ○ for white), '+' at grid intersections, '-' and '|' for region
+     *          borders, and spaces for interiors. Also prints basic metadata.
+     */
+    void printSolution(const State& s) const {
+        std::cout << "\nPuzzle Grid (" << p_.width() << "x" << p_.height()
+                  << "):\n";
         for (int i = 0; i < p_.internalWidth() + 2; ++i) std::cout << '=';
         std::cout << '\n';
 
@@ -232,15 +330,18 @@ public:
                         const int tx_left = (x - 2) / 2;
                         const int tx_right = x / 2;
                         const int ty = (y - 1) / 2;
-                        const int id_left = (tx_left >= 0) ? s.at(tx_left, ty) : -2;
-                        const int id_right = (tx_right < p_.width()) ? s.at(tx_right, ty) : -2;
+                        const int id_left =
+                            (tx_left >= 0) ? s.at(tx_left, ty) : -2;
+                        const int id_right =
+                            (tx_right < p_.width()) ? s.at(tx_right, ty) : -2;
                         std::cout << (id_left != id_right ? '|' : ' ');
                     } else if (y % 2 == 0) {
                         const int ty_up = (y - 2) / 2;
                         const int ty_down = y / 2;
                         const int tx = (x - 1) / 2;
                         const int id_up = (ty_up >= 0) ? s.at(tx, ty_up) : -2;
-                        const int id_down = (ty_down < p_.height()) ? s.at(tx, ty_down) : -2;
+                        const int id_down =
+                            (ty_down < p_.height()) ? s.at(tx, ty_down) : -2;
                         std::cout << (id_up != id_down ? '-' : ' ');
                     } else {
                         std::cout << ' ';
@@ -253,13 +354,14 @@ public:
         std::cout << "\nTotal dots: " << p_.dotCount() << "\n";
     }
 
-private:
-    const Puzzle &p_;
+   private:
+    const Puzzle& p_;
     std::vector<std::vector<std::uint64_t>> zobrist_;
     std::unordered_set<std::uint64_t> visited_;
 
     void initZobrist() {
-        const std::size_t cells = static_cast<std::size_t>(p_.width()) * static_cast<std::size_t>(p_.height());
+        const std::size_t cells = static_cast<std::size_t>(p_.width())
+                                  * static_cast<std::size_t>(p_.height());
         const std::size_t nd = p_.dotCount();
         zobrist_.assign(cells, std::vector<std::uint64_t>(nd));
         std::mt19937_64 rng(std::random_device{}());
@@ -274,12 +376,13 @@ private:
         return (tx >= 0 && tx < p_.width() && ty >= 0 && ty < p_.height());
     }
 
-    bool isValidTile(const State &s, int tx, int ty) const noexcept {
+    bool isValidTile(const State& s, int tx, int ty) const noexcept {
         if (!inTileBounds(tx, ty)) return false;
         return s.at(tx, ty) == -1;
     }
 
-    static std::pair<int,int> getSymmetricTile(int dot_x, int dot_y, int tx, int ty) noexcept {
+    static std::pair<int, int> getSymmetricTile(int dot_x, int dot_y, int tx,
+                                                int ty) noexcept {
         const int cx = tx * 2 + 1;
         const int cy = ty * 2 + 1;
         const int rx = 2 * dot_x - cx;
@@ -293,7 +396,7 @@ private:
         return (std::abs(cx - dot_x) <= 1) && (std::abs(cy - dot_y) <= 1);
     }
 
-    bool allDotsUsed(const State &s) const {
+    bool allDotsUsed(const State& s) const {
         std::vector<char> used(p_.dotCount(), 0);
         for (int y = 0; y < p_.height(); ++y) {
             for (int x = 0; x < p_.width(); ++x) {
@@ -301,11 +404,12 @@ private:
                 if (v >= 0 && v < static_cast<int>(used.size())) used[v] = 1;
             }
         }
-        return std::all_of(used.begin(), used.end(), [](char c){ return c != 0; });
+        return std::all_of(used.begin(), used.end(),
+                           [](char c) { return c != 0; });
     }
 };
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     std::ios::sync_with_stdio(false);
     std::cin.tie(nullptr);
 
@@ -324,7 +428,8 @@ int main(int argc, char **argv) {
         std::fprintf(stderr, "Error reading file\n");
         return 1;
     }
-    while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+    while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
+        line.pop_back();
 
     const std::string prefix = "Game ID: ";
     std::unique_ptr<Puzzle> puzzle;
