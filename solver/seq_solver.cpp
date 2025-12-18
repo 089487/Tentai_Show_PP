@@ -195,21 +195,9 @@ class Solver {
         initial.filledCount = 0;
         initial.hash = 0;
 
-        for (int i = 0; i < static_cast<int>(p_.dotCount()); ++i) {
-            const int dx = p_.dots()[i].x();
-            const int dy = p_.dots()[i].y();
-            if ((dx % 2) != 0 && (dy % 2) != 0) {
-                const int tx = (dx - 1) / 2;
-                const int ty = (dy - 1) / 2;
-                if (inTileBounds(tx, ty) && initial.at(tx, ty) == -1) {
-                    initial.at(tx, ty) = static_cast<int8_t>(i);
-                    ++initial.filledCount;
-                    initial.hash ^= zobrist_[ty * p_.width() + tx][i];
-                } else {
-                    std::fprintf(stderr, "Error: Overlapping dots?\n");
-                    return std::nullopt;
-                }
-            }
+        // Prefill forced tiles from all dots: center, edge, and corner cases.
+        if (!seedForcedTiles(initial)) {
+            return std::nullopt;
         }
 
         std::queue<State> q;
@@ -271,35 +259,7 @@ class Solver {
                     }
                 }
 
-                const int ctx = (dx - 1) / 2;
-                const int cty = (dy - 1) / 2;
-                for (int ty = cty - 1; ty <= cty + 1; ++ty) {
-                    for (int tx = ctx - 1; tx <= ctx + 1; ++tx) {
-                        if (!isValidTile(s, tx, ty)) continue;
-                        if (!touchesDot(dx, dy, tx, ty)) continue;
-
-                        const auto [sx, sy] = getSymmetricTile(dx, dy, tx, ty);
-                        if (!(isValidTile(s, sx, sy) || (tx == sx && ty == sy)))
-                            continue;
-
-                        State next = s;
-                        next.at(tx, ty) = static_cast<int8_t>(d);
-                        next.hash ^= zobrist_[ty * p_.width() + tx][d];
-                        ++next.filledCount;
-                        if (tx != sx || ty != sy) {
-                            if (next.at(sx, sy) == -1) {
-                                next.at(sx, sy) = static_cast<int8_t>(d);
-                                next.hash ^= zobrist_[sy * p_.width() + sx][d];
-                                ++next.filledCount;
-                            } else {
-                                continue;
-                            }
-                        }
-                        if (visited_.insert(next.hash).second) {
-                            q.push(std::move(next));
-                        }
-                    }
-                }
+                // Removed check loop: initial forced tiles are prefilled.
             }
         }
         return std::nullopt;
@@ -358,6 +318,69 @@ class Solver {
     const Puzzle& p_;
     std::vector<std::vector<std::uint64_t>> zobrist_;
     std::unordered_set<std::uint64_t> visited_;
+
+    // Try to fill a tile in the state with dot id `d` and update hash/counters.
+    bool tryFill(State& s, int tx, int ty, int d) {
+        if (!inTileBounds(tx, ty)) return true;  // out-of-bounds is ignored
+        const int8_t cur = s.at(tx, ty);
+        if (cur == -1) {
+            s.at(tx, ty) = static_cast<int8_t>(d);
+            s.hash ^= zobrist_[ty * p_.width() + tx][d];
+            ++s.filledCount;
+            return true;
+        }
+        return cur == d;  // ok if already same dot, conflict otherwise
+    }
+
+    // Prefill tiles that are directly occupied by a dot: center, edge, corner.
+    bool seedForcedTiles(State& s) {
+        for (int d = 0; d < static_cast<int>(p_.dotCount()); ++d) {
+            const int dx = p_.dots()[d].x();
+            const int dy = p_.dots()[d].y();
+            const bool oddx = (dx % 2) != 0;
+            const bool oddy = (dy % 2) != 0;
+
+            if (oddx && oddy) {
+                // Dot at tile center
+                const int tx = (dx - 1) / 2;
+                const int ty = (dy - 1) / 2;
+                if (!tryFill(s, tx, ty, d)) {
+                    std::fprintf(stderr, "Error: Overlapping dots at center?\n");
+                    return false;
+                }
+            } else if (oddx && !oddy) {
+                // Dot on horizontal edge between two tiles (above/below)
+                const int tx = (dx - 1) / 2;
+                const int ty1 = dy / 2 - 1;
+                const int ty2 = dy / 2;
+                if (!tryFill(s, tx, ty1, d) || !tryFill(s, tx, ty2, d)) {
+                    std::fprintf(stderr, "Error: Overlapping dots on edge?\n");
+                    return false;
+                }
+            } else if (!oddx && oddy) {
+                // Dot on vertical edge between two tiles (left/right)
+                const int ty = (dy - 1) / 2;
+                const int tx1 = dx / 2 - 1;
+                const int tx2 = dx / 2;
+                if (!tryFill(s, tx1, ty, d) || !tryFill(s, tx2, ty, d)) {
+                    std::fprintf(stderr, "Error: Overlapping dots on edge?\n");
+                    return false;
+                }
+            } else {
+                // Dot at a corner shared by four tiles
+                const int tx1 = dx / 2 - 1;
+                const int tx2 = dx / 2;
+                const int ty1 = dy / 2 - 1;
+                const int ty2 = dy / 2;
+                if (!tryFill(s, tx1, ty1, d) || !tryFill(s, tx1, ty2, d)
+                    || !tryFill(s, tx2, ty1, d) || !tryFill(s, tx2, ty2, d)) {
+                    std::fprintf(stderr, "Error: Overlapping dots at corner?\n");
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 
     void initZobrist() {
         const std::size_t cells = static_cast<std::size_t>(p_.width())
