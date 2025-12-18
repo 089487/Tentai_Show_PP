@@ -49,6 +49,7 @@ def main():
     
     passed = 0
     total = 0
+    durations = []
     
     for input_file in input_files:
         total += 1
@@ -77,9 +78,10 @@ def main():
                 message = msg
                 
         print(f"{filename:<20} | {status:<10} | {duration:.4f}s | {message}")
+        durations.append(duration)
         
     print("-" * 60)
-    print(f"Summary: {passed}/{total} passed")
+    print(f"Summary: {passed}/{total} passed, Average Time: {sum(durations)/total:.4f}s")
 
 if __name__ == "__main__":
     main()
