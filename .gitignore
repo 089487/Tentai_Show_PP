@@ -4,3 +4,4 @@
 */.vscode
 seq_solver_cpp
 **/__pycache__/
+visualizer
