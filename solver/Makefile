@@ -14,5 +14,12 @@ openmp_solver: openmp_solver.c
 seq_solver: seq_solver.c
 	$(CC) $(CFLAGS) -o seq_solver seq_solver.c
 
+# C++23 refactor target (non-intrusive)
+CXX = g++
+CXXFLAGS = -O2 -Wall -std=c++23
+
+seq_solver_cpp: seq_solver.cpp
+	$(CXX) $(CXXFLAGS) -o seq_solver_cpp seq_solver.cpp
+
 clean:
-	rm -f openmp_solver seq_solver
+	rm -f openmp_solver seq_solver seq_solver_cpp
