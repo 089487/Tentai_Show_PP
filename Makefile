@@ -15,6 +15,9 @@ all: openmp_solver
 openmp_solver: solver/openmp_solver.cpp
 	$(CXX) $(CXXFLAGS) $(OMPFLAGS) -o solver/openmp_solver_cpp solver/openmp_solver.cpp
 
+openmp_solver_dfs: solver/openmp_solver_dfs.cpp
+	$(CXX) $(CXXFLAGS) $(OMPFLAGS) -o solver/openmp_solver_dfs_cpp solver/openmp_solver_dfs.cpp
+
 seq_solver_dfs: solver/seq_solver_dfs.cpp
 	$(CXX) $(CXXFLAGS) -o solver/seq_solver_dfs_cpp solver/seq_solver_dfs.cpp
 
