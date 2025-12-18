@@ -9,7 +9,7 @@ echo "Running with ${OMP_NUM_THREADS} threads"
 # echo "Running on 7x7 puzzles"
 # python3 grader.py ./solver/openmp_solver_cpp ./data/7x7 120.0
 
-echo "Running on 12x12 puzzles"
+echo "Running on 11x11 puzzles"
 python3 grader.py ./solver/seq_solver_dfs_cpp ./data/11x11 10.0
 
 # echo "Running on 20x20 puzzles"
