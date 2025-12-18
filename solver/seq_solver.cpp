@@ -154,11 +154,11 @@ class State {
      * to deduplicate states during search.
      */
     State() = default;
-    State(int w, int h) : grid_(h, std::vector<int8_t>(w, -1)) {}
+    State(int w, int h) : grid_(h, std::vector<int16_t>(w, -1)) {}
 
-    int8_t& at(int x, int y) { return grid_[y][x]; }
-    int8_t at(int x, int y) const { return grid_[y][x]; }
-    const std::vector<std::vector<int8_t>>& grid() const noexcept {
+    int16_t& at(int x, int y) { return grid_[y][x]; }
+    int16_t at(int x, int y) const { return grid_[y][x]; }
+    const std::vector<std::vector<int16_t>>& grid() const noexcept {
         return grid_;
     }
 
@@ -166,7 +166,7 @@ class State {
     std::uint64_t hash{0};
 
    private:
-    std::vector<std::vector<int8_t>> grid_{};  // [h][w]
+    std::vector<std::vector<int16_t>> grid_{};  // [h][w]
 };
 
 class Solver {
@@ -232,7 +232,7 @@ class Solver {
                                 if (isValidTile(s, sx, sy)
                                     || (nx == sx && ny == sy)) {
                                     State next = s;
-                                    next.at(nx, ny) = static_cast<int8_t>(d);
+                                    next.at(nx, ny) = static_cast<int16_t>(d);
                                     next.hash ^=
                                         zobrist_[ny * p_.width() + nx][d];
                                     ++next.filledCount;
@@ -240,7 +240,7 @@ class Solver {
                                     if (nx != sx || ny != sy) {
                                         if (next.at(sx, sy) == -1) {
                                             next.at(sx, sy) =
-                                                static_cast<int8_t>(d);
+                                                static_cast<int16_t>(d);
                                             next.hash ^=
                                                 zobrist_[sy * p_.width() + sx]
                                                         [d];
@@ -322,9 +322,9 @@ class Solver {
     // Try to fill a tile in the state with dot id `d` and update hash/counters.
     bool tryFill(State& s, int tx, int ty, int d) {
         if (!inTileBounds(tx, ty)) return true;  // out-of-bounds is ignored
-        const int8_t cur = s.at(tx, ty);
+        const int16_t cur = s.at(tx, ty);
         if (cur == -1) {
-            s.at(tx, ty) = static_cast<int8_t>(d);
+            s.at(tx, ty) = static_cast<int16_t>(d);
             s.hash ^= zobrist_[ty * p_.width() + tx][d];
             ++s.filledCount;
             return true;
