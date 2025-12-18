@@ -61,7 +61,7 @@ echo "-------------------------------------"
 
 # 1. Compile the visualizer solver
 echo "Building visualizer..."
-make -C solver visualizer
+make visualizer
 if [ $? -ne 0 ]; then
     echo "Error: Failed to build the visualizer. Aborting."
     exit 1
