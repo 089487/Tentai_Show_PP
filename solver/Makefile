@@ -21,5 +21,8 @@ openmp_solver_cpp: openmp_solver.cpp
 seq_solver: seq_solver.cpp
 	$(CXX) $(CXXFLAGS) -o seq_solver_cpp seq_solver.cpp
 
+visualizer: bfs_visualizer.cpp
+	$(CXX) $(CXXFLAGS) -o bfs_visualizer bfs_visualizer.cpp
+
 clean:
-	rm -f openmp_solver seq_solver seq_solver_cpp openmp_solver_cpp
+	rm -f openmp_solver seq_solver seq_solver_cpp openmp_solver_cpp visualizer
