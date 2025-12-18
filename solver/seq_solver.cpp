@@ -213,13 +213,16 @@ class Solver {
                 continue;
             }
 
-            for (int d = 0; d < static_cast<int>(p_.dotCount()); ++d) {
-                const int dx = p_.dots()[d].x();
-                const int dy = p_.dots()[d].y();
+            //for (int d = 0; d < static_cast<int>(p_.dotCount()); ++d) {
+                //const int dx = p_.dots()[d].x();
+                //const int dy = p_.dots()[d].y();
 
                 for (int y = 0; y < p_.height(); ++y) {
                     for (int x = 0; x < p_.width(); ++x) {
-                        if (s.at(x, y) == d) {
+                        if (s.at(x, y) !=-1 ) {
+                            int d = s.at(x, y);
+                            const int dx = p_.dots()[d].x();
+                            const int dy = p_.dots()[d].y();
                             static constexpr int dirs[4][2] = {
                                 {1, 0}, {-1, 0}, {0, 1}, {0, -1}};
                             for (auto& dir : dirs) {
@@ -260,7 +263,7 @@ class Solver {
                 }
 
                 // Removed check loop: initial forced tiles are prefilled.
-            }
+            //}
         }
         return std::nullopt;
     }
